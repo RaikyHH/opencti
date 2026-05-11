@@ -16615,6 +16615,8 @@ type CustomFieldValue {
   field_id: ID!
   field_name: String!
   int_value: Int
+  string_value: String
+  select_value: String
 }
 
 type CustomFieldDefinition implements InternalObject & BasicObject {
@@ -16634,6 +16636,7 @@ type CustomFieldDefinition implements InternalObject & BasicObject {
   default_value: String
   min_value: Int
   max_value: Int
+  select_options: [String!]
 }
 
 enum CustomFieldDefinitionsOrdering {
@@ -16668,4 +16671,5 @@ input CustomFieldDefinitionAddInput {
   default_value: String
   min_value: Int
   max_value: Int
+  select_options: [String!]
 }
