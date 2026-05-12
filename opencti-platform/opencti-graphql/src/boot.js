@@ -5,7 +5,7 @@ import { shutdownRedisClients } from './database/redis';
 import { shutdownModules, startModules } from './managers';
 import { initLockFork } from './lock/master-lock';
 import { checkSystemDependencies } from './boot-utils';
-import { startEngineHealthMonitor, stopEngineHealthMonitor } from './database/engine';
+import { startEngineHealthMonitor, stopEngineHealthMonitor } from './database/engine-monitoring';
 
 // region platform start and stop
 export const platformStart = async () => {
