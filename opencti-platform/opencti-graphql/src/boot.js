@@ -49,7 +49,7 @@ export const platformStart = async () => {
       throw modulesError;
     }
     // Start the engine health monitoring CRON
-      startEngineHealthMonitor();
+    startEngineHealthMonitor();
     logApp.info(`[OPENCTI] Platform started ${Date.now() - startTime} ms`);
   } catch (_mainError) {
     process.exit(1);
