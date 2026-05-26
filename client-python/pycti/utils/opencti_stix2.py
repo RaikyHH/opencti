@@ -59,6 +59,46 @@ ERROR_TYPE_TIMEOUT = "Request timed out"
 #: STIX Extension ID for OpenCTI custom objects and properties
 STIX_EXT_OCTI: str = "extension-definition--ea279b3e-5c71-4632-ac08-831c66a786ba"
 
+# ---------------------------------------------------------------------------
+# STIX 2.0 backend dispatch
+# ---------------------------------------------------------------------------
+# Entities whose STIX 2.0 serialization is delegated to the GraphQL backend
+# field `toStix(version: stix_2_0)` (cf.
+# `opencti-platform/opencti-graphql/src/database/stix-2-0-converter.ts`).
+# Adding a new entity to the migration only requires:
+#   1. adding a `to_stix_2_0` method on the entity client
+#      (see `pycti/entities/opencti_malware.py` for the canonical pattern,
+#       including JSONDecodeError protection),
+#   2. adding one entry to `_STIX_2_0_BACKEND_DISPATCH` (keyed by OpenCTI
+#      `entity_type`),
+#   3. adding the STIX type (lowercase) to `_STIX_2_0_BACKEND_STIX_TYPES`.
+#
+# OpenCTI `entity_type` (GraphQL) -> callable(api_client, entity_id) -> dict
+_STIX_2_0_BACKEND_DISPATCH = {
+    "Malware": lambda api, eid: api.malware.to_stix_2_0(id=eid),
+}
+
+# STIX types (lowercase) whose nested-ref enrichment is already produced by
+# the backend payload. `prepare_export` must skip the
+# `stix_nested_ref_relationship` enrichment block for these types to avoid
+# duplicated *_ref / *_refs entries.
+_STIX_2_0_BACKEND_STIX_TYPES = {"malware"}
+
+# Raw GraphQL keys still consumed by `prepare_export` to expand related SDOs
+# into the bundle (Identity for the creator, marking-definition objects,
+# inlined binary files, ...). Backend payloads contain the corresponding
+# *_ref / *_refs but not the SDOs themselves, so we re-inject these keys on
+# top of the backend payload until `prepare_export` is refactored.
+_STIX_2_0_PRESERVED_KEYS = (
+    "createdBy",
+    "createdById",
+    "objectMarking",
+    "objectMarkingIds",
+    "objectOrganization",
+    "importFiles",
+    "importFilesIds",
+)
+
 #: STIX Extension ID for OpenCTI custom Cyber Observables (SCO)
 STIX_EXT_OCTI_SCO: str = "extension-definition--f93e2c80-4231-4f9a-af8b-95c9bd566a82"
 
@@ -1830,6 +1870,32 @@ class OpenCTIStix2:
         # Handle model deviation
         original_entity_type = entity["entity_type"]
 
+        # STIX 2.0 backend dispatch: types whose STIX serialization is delegated
+        # to the GraphQL `toStix(version: stix_2_0)` field. The backend payload
+        # already produces deterministic refs (e.g. operating_system_refs,
+        # sample_refs for Malware), so we short-circuit the legacy client-side
+        # converter. We still preserve the raw GraphQL keys that `prepare_export`
+        # needs to expand related SDOs (createdBy, objectMarking,
+        # objectOrganization, importFiles) into the bundle.
+        dispatcher = _STIX_2_0_BACKEND_DISPATCH.get(entity["entity_type"])
+        if dispatcher is not None:
+            backend_stix = dispatcher(self.opencti, entity["id"])
+            if backend_stix is not None:
+                for key in _STIX_2_0_PRESERVED_KEYS:
+                    if key in entity:
+                        backend_stix[key] = entity[key]
+                return backend_stix
+            # Defensive fallback: if the backend returned None (entity not
+            # found, insufficient rights, malformed JSON, etc.), log a warning
+            # and continue with the legacy converter so the bundle export is
+            # never silently broken. The warning helps detect backend
+            # regressions that would otherwise be hidden by the fallback.
+            self.opencti.app_logger.warning(
+                "[opencti_stix2] generate_export: backend STIX 2.0 unavailable, "
+                "falling back to legacy converter",
+                {"id": entity["id"], "entity_type": entity["entity_type"]},
+            )
+
         # Identities
         if IdentityTypes.has_value(entity["entity_type"]):
             entity["entity_type"] = "Identity"
@@ -2415,43 +2481,50 @@ class OpenCTIStix2:
             del entity["importFilesIds"]
 
         # StixRefRelationship
-        stix_nested_ref_relationships = self.opencti.stix_nested_ref_relationship.list(
-            fromId=entity["x_opencti_id"], filters=access_filter
-        )
-        for stix_nested_ref_relationship in stix_nested_ref_relationships:
-            if "standard_id" in stix_nested_ref_relationship["to"]:
-                # dirty fix because the sample and operating-system ref are not multiple for a Malware Analysis
-                # will be replaced by a proper toStix converter in the back
-                if not MultipleRefRelationship.has_value(
-                    stix_nested_ref_relationship["relationship_type"]
-                ) or (
-                    entity["type"] == "malware-analysis"
-                    and stix_nested_ref_relationship["relationship_type"]
-                    in ["operating-system", "sample"]
-                ):
-                    key = (
+        # Skipped for types whose STIX 2.0 representation is produced by the
+        # backend `toStix(version: stix_2_0)` field: the backend payload already
+        # includes the relevant *_ref/*_refs (e.g. operating_system_refs,
+        # sample_refs for Malware), so re-enriching here would duplicate entries.
+        if entity["type"] not in _STIX_2_0_BACKEND_STIX_TYPES:
+            stix_nested_ref_relationships = (
+                self.opencti.stix_nested_ref_relationship.list(
+                    fromId=entity["x_opencti_id"], filters=access_filter
+                )
+            )
+            for stix_nested_ref_relationship in stix_nested_ref_relationships:
+                if "standard_id" in stix_nested_ref_relationship["to"]:
+                    # dirty fix because the sample and operating-system ref are not multiple for a Malware Analysis
+                    # will be replaced by a proper toStix converter in the back
+                    if not MultipleRefRelationship.has_value(
                         stix_nested_ref_relationship["relationship_type"]
-                        .replace("obs_", "")
-                        .replace("-", "_")
-                        + "_ref"
-                    )
-                    entity[key] = stix_nested_ref_relationship["to"]["standard_id"]
-
-                else:
-                    key = (
-                        stix_nested_ref_relationship["relationship_type"]
-                        .replace("obs_", "")
-                        .replace("-", "_")
-                        + "_refs"
-                    )
-                    if key in entity and isinstance(entity[key], list):
-                        entity[key].append(
-                            stix_nested_ref_relationship["to"]["standard_id"]
+                    ) or (
+                        entity["type"] == "malware-analysis"
+                        and stix_nested_ref_relationship["relationship_type"]
+                        in ["operating-system", "sample"]
+                    ):
+                        key = (
+                            stix_nested_ref_relationship["relationship_type"]
+                            .replace("obs_", "")
+                            .replace("-", "_")
+                            + "_ref"
                         )
+                        entity[key] = stix_nested_ref_relationship["to"]["standard_id"]
+
                     else:
-                        entity[key] = [
-                            stix_nested_ref_relationship["to"]["standard_id"]
-                        ]
+                        key = (
+                            stix_nested_ref_relationship["relationship_type"]
+                            .replace("obs_", "")
+                            .replace("-", "_")
+                            + "_refs"
+                        )
+                        if key in entity and isinstance(entity[key], list):
+                            entity[key].append(
+                                stix_nested_ref_relationship["to"]["standard_id"]
+                            )
+                        else:
+                            entity[key] = [
+                                stix_nested_ref_relationship["to"]["standard_id"]
+                            ]
         result.append(entity)
 
         if mode == "simple":
