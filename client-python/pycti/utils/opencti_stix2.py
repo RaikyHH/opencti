@@ -1877,24 +1877,23 @@ class OpenCTIStix2:
         # converter. We still preserve the raw GraphQL keys that `prepare_export`
         # needs to expand related SDOs (createdBy, objectMarking,
         # objectOrganization, importFiles) into the bundle.
+        # Types absent from the dispatch fall through to the legacy converter
+        # below (this is the migration mechanism, not an error). However, when
+        # an entity *is* migrated but the backend returns no payload (entity
+        # vanished, insufficient rights, ...), we raise explicitly rather than
+        # silently producing a divergent legacy bundle.
         dispatcher = _STIX_2_0_BACKEND_DISPATCH.get(entity["entity_type"])
         if dispatcher is not None:
             backend_stix = dispatcher(self.opencti, entity["id"])
-            if backend_stix is not None:
-                for key in _STIX_2_0_PRESERVED_KEYS:
-                    if key in entity:
-                        backend_stix[key] = entity[key]
-                return backend_stix
-            # Defensive fallback: if the backend returned None (entity not
-            # found, insufficient rights, malformed JSON, etc.), log a warning
-            # and continue with the legacy converter so the bundle export is
-            # never silently broken. The warning helps detect backend
-            # regressions that would otherwise be hidden by the fallback.
-            self.opencti.app_logger.warning(
-                "[opencti_stix2] generate_export: backend STIX 2.0 unavailable, "
-                "falling back to legacy converter",
-                {"id": entity["id"], "entity_type": entity["entity_type"]},
-            )
+            if backend_stix is None:
+                raise ValueError(
+                    f"Backend STIX 2.0 conversion returned no payload for "
+                    f"{entity['entity_type']} {entity['id']!r}"
+                )
+            for key in _STIX_2_0_PRESERVED_KEYS:
+                if key in entity:
+                    backend_stix[key] = entity[key]
+            return backend_stix
 
         # Identities
         if IdentityTypes.has_value(entity["entity_type"]):
