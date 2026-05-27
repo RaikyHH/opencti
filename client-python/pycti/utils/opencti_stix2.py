@@ -59,36 +59,22 @@ ERROR_TYPE_TIMEOUT = "Request timed out"
 #: STIX Extension ID for OpenCTI custom objects and properties
 STIX_EXT_OCTI: str = "extension-definition--ea279b3e-5c71-4632-ac08-831c66a786ba"
 
-# ---------------------------------------------------------------------------
-# STIX 2.0 backend dispatch
-# ---------------------------------------------------------------------------
-# Entities whose STIX 2.0 serialization is delegated to the GraphQL backend
-# field `toStix(version: stix_2_0)` (cf.
-# `opencti-platform/opencti-graphql/src/database/stix-2-0-converter.ts`).
-# Adding a new entity to the migration only requires:
-#   1. adding a `to_stix_2_0` method on the entity client
-#      (see `pycti/entities/opencti_malware.py` for the canonical pattern,
-#       including JSONDecodeError protection),
-#   2. adding one entry to `_STIX_2_0_BACKEND_DISPATCH` (keyed by OpenCTI
-#      `entity_type`),
-#   3. adding the STIX type (lowercase) to `_STIX_2_0_BACKEND_STIX_TYPES`.
-#
-# OpenCTI `entity_type` (GraphQL) -> callable(api_client, entity_id) -> dict
+# STIX 2.0 delegation backend dispatch
+# TODO(stix-2-0-migration): once every entity_type is covered, this dict
+# becomes the unique conversion path and `generate_export` can be reduced
+# to a one-liner
 _STIX_2_0_BACKEND_DISPATCH = {
     "Malware": lambda api, eid: api.malware.to_stix_2_0(id=eid),
 }
 
-# STIX types (lowercase) whose nested-ref enrichment is already produced by
-# the backend payload. `prepare_export` must skip the
-# `stix_nested_ref_relationship` enrichment block for these types to avoid
-# duplicated *_ref / *_refs entries.
+# TODO(stix-2-0-migration): DELETE this set once every entity is migrated.
+# The whole nested-ref enrichment block in `prepare_export` will disappear
+# (no need to guard it any more).
 _STIX_2_0_BACKEND_STIX_TYPES = {"malware"}
 
-# Raw GraphQL keys still consumed by `prepare_export` to expand related SDOs
-# into the bundle (Identity for the creator, marking-definition objects,
-# inlined binary files, ...). Backend payloads contain the corresponding
-# *_ref / *_refs but not the SDOs themselves, so we re-inject these keys on
-# top of the backend payload until `prepare_export` is refactored.
+# TODO(stix-2-0-migration): DELETE this tuple (and its re-injection loop
+# in `generate_export`) once the backend also produces these related SDOs
+# in a bundle-shaped response.
 _STIX_2_0_PRESERVED_KEYS = (
     "createdBy",
     "createdById",
@@ -1872,16 +1858,8 @@ class OpenCTIStix2:
 
         # STIX 2.0 backend dispatch: types whose STIX serialization is delegated
         # to the GraphQL `toStix(version: stix_2_0)` field. The backend payload
-        # already produces deterministic refs (e.g. operating_system_refs,
-        # sample_refs for Malware), so we short-circuit the legacy client-side
-        # converter. We still preserve the raw GraphQL keys that `prepare_export`
-        # needs to expand related SDOs (createdBy, objectMarking,
-        # objectOrganization, importFiles) into the bundle.
-        # Types absent from the dispatch fall through to the legacy converter
-        # below (this is the migration mechanism, not an error). However, when
-        # an entity *is* migrated but the backend returns no payload (entity
-        # vanished, insufficient rights, ...), we raise explicitly rather than
-        # silently producing a divergent legacy bundle.
+        # already produces deterministic refs.
+        # TODO(stix-2-0-migration): remove legacy code once every entity is migrated
         dispatcher = _STIX_2_0_BACKEND_DISPATCH.get(entity["entity_type"])
         if dispatcher is not None:
             backend_stix = dispatcher(self.opencti, entity["id"])
@@ -2480,10 +2458,8 @@ class OpenCTIStix2:
             del entity["importFilesIds"]
 
         # StixRefRelationship
-        # Skipped for types whose STIX 2.0 representation is produced by the
-        # backend `toStix(version: stix_2_0)` field: the backend payload already
-        # includes the relevant *_ref/*_refs (e.g. operating_system_refs,
-        # sample_refs for Malware), so re-enriching here would duplicate entries.
+        # Skipped for types whose STIX 2.0 representation is produced by the backend `toStix(version: stix_2_0)`
+        # TODO(stix-2-0-migration): DELETE once every entity is migrated.
         if entity["type"] not in _STIX_2_0_BACKEND_STIX_TYPES:
             stix_nested_ref_relationships = (
                 self.opencti.stix_nested_ref_relationship.list(
