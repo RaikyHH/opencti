@@ -6510,12 +6510,6 @@ export type CustomFieldValueAddInput = {
   string_value?: InputMaybe<Scalars['String']['input']>;
 };
 
-export type CustomFieldValueInput = {
-  __typename?: 'CustomFieldValueInput';
-  cursor: Scalars['String']['output'];
-  node: CaseIncident;
-};
-
 export type CustomView = BasicObject & InternalObject & {
   __typename?: 'CustomView';
   created_at: Scalars['DateTime']['output'];
@@ -39432,7 +39426,6 @@ export type ResolversTypes = ResolversObject<{
   CustomFieldDefinitionsOrdering: CustomFieldDefinitionsOrdering;
   CustomFieldValue: ResolverTypeWrapper<CustomFieldValue>;
   CustomFieldValueAddInput: CustomFieldValueAddInput;
-  CustomFieldValueInput: ResolverTypeWrapper<Omit<CustomFieldValueInput, 'node'> & { node: ResolversTypes['CaseIncident'] }>;
   CustomView: ResolverTypeWrapper<BasicStoreEntityCustomView>;
   CustomViewAddInput: CustomViewAddInput;
   CustomViewDuplicateInput: CustomViewDuplicateInput;
@@ -40537,7 +40530,6 @@ export type ResolversParentTypes = ResolversObject<{
   CustomFieldDefinitionEdge: CustomFieldDefinitionEdge;
   CustomFieldValue: CustomFieldValue;
   CustomFieldValueAddInput: CustomFieldValueAddInput;
-  CustomFieldValueInput: Omit<CustomFieldValueInput, 'node'> & { node: ResolversParentTypes['CaseIncident'] };
   CustomView: BasicStoreEntityCustomView;
   CustomViewAddInput: CustomViewAddInput;
   CustomViewDuplicateInput: CustomViewDuplicateInput;
@@ -43441,11 +43433,6 @@ export type CustomFieldValueResolvers<ContextType = any, ParentType extends Reso
   int_value?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   select_value?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   string_value?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-}>;
-
-export type CustomFieldValueInputResolvers<ContextType = any, ParentType extends ResolversParentTypes['CustomFieldValueInput'] = ResolversParentTypes['CustomFieldValueInput']> = ResolversObject<{
-  cursor?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  node?: Resolver<ResolversTypes['CaseIncident'], ParentType, ContextType>;
 }>;
 
 export type CustomViewResolvers<ContextType = any, ParentType extends ResolversParentTypes['CustomView'] = ResolversParentTypes['CustomView']> = ResolversObject<{
@@ -52966,7 +52953,6 @@ export type Resolvers<ContextType = any> = ResolversObject<{
   CustomFieldDefinitionConnection?: CustomFieldDefinitionConnectionResolvers<ContextType>;
   CustomFieldDefinitionEdge?: CustomFieldDefinitionEdgeResolvers<ContextType>;
   CustomFieldValue?: CustomFieldValueResolvers<ContextType>;
-  CustomFieldValueInput?: CustomFieldValueInputResolvers<ContextType>;
   CustomView?: CustomViewResolvers<ContextType>;
   CustomViewsConnection?: CustomViewsConnectionResolvers<ContextType>;
   CustomViewsEdge?: CustomViewsEdgeResolvers<ContextType>;

@@ -12438,11 +12438,6 @@ type CaseIncidentEdge {
   node: CaseIncident!
 }
 
-type CustomFieldValueInput {
-  cursor: String!
-  node: CaseIncident!
-}
-
 input CaseIncidentAddInput {
   stix_id: StixId
   x_opencti_stix_ids: [StixId]
