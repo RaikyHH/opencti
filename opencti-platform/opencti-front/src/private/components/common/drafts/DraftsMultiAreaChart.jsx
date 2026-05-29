@@ -1,0 +1,126 @@
+import React, { useState, useMemo } from 'react';
+import { graphql } from 'react-relay';
+import { QueryRenderer } from '../../../../relay/environment';
+import { useFormatter } from '../../../../components/i18n';
+import { monthsAgo, now } from '../../../../utils/Time';
+import { buildFiltersAndOptionsForWidgets } from '../../../../utils/filters/filtersUtils';
+import WidgetContainer from '../../../../components/dashboard/WidgetContainer';
+import WidgetNoData from '../../../../components/dashboard/WidgetNoData';
+import WidgetMultiAreas from '../../../../components/dashboard/WidgetMultiAreas';
+import Loader, { LoaderVariant } from '../../../../components/Loader';
+import useDashboardViz from '../../../../components/dashboard/useDashboardViz';
+import WidgetNoHostEntity from '../../../../components/dashboard/WidgetNoHostEntity';
+
+const draftsMultiAreaChartTimeSeriesQuery = graphql`
+  query DraftsMultiAreaChartTimeSeriesQuery(
+    $field: String!
+    $operation: StatsOperation!
+    $startDate: DateTime!
+    $endDate: DateTime!
+    $interval: String!
+    $filters: FilterGroup
+    $search: String
+  ) {
+    draftWorkspacesTimeSeries(
+      field: $field
+      operation: $operation
+      startDate: $startDate
+      endDate: $endDate
+      interval: $interval
+      filters: $filters
+      search: $search
+    ) {
+      date
+      value
+    }
+  }
+`;
+
+const DraftsMultiAreaChart = ({
+  variant,
+  height,
+  startDate,
+  endDate,
+  dataSelection,
+  parameters = {},
+  popover,
+  host,
+}) => {
+  const { t_i18n } = useFormatter();
+  const [chart, setChart] = useState();
+  const { resolvedDataSelection, isMissingHostEntity, isPreviewMode } = useDashboardViz({
+    perspective: 'entities',
+    dataSelection,
+    host,
+  });
+
+  const fallbackDates = useMemo(() => ({
+    start: monthsAgo(12),
+    end: now(),
+  }), []);
+
+  const selection = resolvedDataSelection[0];
+  const { filters } = useMemo(() => buildFiltersAndOptionsForWidgets(selection?.filters), [selection]);
+
+  const variables = useMemo(() => ({
+    field: selection?.date_attribute && selection.date_attribute.length > 0
+      ? selection.date_attribute
+      : 'created_at',
+    operation: 'count',
+    startDate: startDate ?? fallbackDates.start,
+    endDate: endDate ?? fallbackDates.end,
+    interval: parameters.interval ?? 'day',
+    filters,
+  }), [startDate, endDate, fallbackDates, parameters.interval, selection, filters]);
+
+  const renderContent = () => {
+    if (isMissingHostEntity) {
+      return <WidgetNoHostEntity host={host} />;
+    }
+    return (
+      <QueryRenderer
+        query={draftsMultiAreaChartTimeSeriesQuery}
+        variables={variables}
+        render={({ props }) => {
+          if (props && props.draftWorkspacesTimeSeries) {
+            return (
+              <WidgetMultiAreas
+                series={[{
+                  name: selection?.label || t_i18n('Number of draft workspaces'),
+                  data: props.draftWorkspacesTimeSeries.map((entry) => ({
+                    x: new Date(entry.date),
+                    y: entry.value,
+                  })),
+                }]}
+                interval={parameters.interval}
+                isStacked={parameters.stacked}
+                hasLegend={parameters.legend}
+                onMounted={setChart}
+              />
+            );
+          }
+          if (props) {
+            return <WidgetNoData />;
+          }
+          return <Loader variant={LoaderVariant.inElement} />;
+        }}
+      />
+    );
+  };
+
+  return (
+    <WidgetContainer
+      padding="small"
+      height={height}
+      title={parameters.title ?? t_i18n('Draft workspaces history')}
+      variant={variant}
+      chart={chart}
+      action={popover}
+      showPreviewTag={isPreviewMode}
+    >
+      {renderContent()}
+    </WidgetContainer>
+  );
+};
+
+export default DraftsMultiAreaChart;
