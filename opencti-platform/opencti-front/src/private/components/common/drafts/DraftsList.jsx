@@ -13,6 +13,7 @@ import WidgetNoHostEntity from '../../../../components/dashboard/WidgetNoHostEnt
 const defaultDraftColumns = [
   { attribute: 'name', label: 'Name' },
   { attribute: 'draft_status', label: 'Status' },
+  { attribute: 'workflowInstance', label: 'Workflow status' },
   { attribute: 'creators', label: 'Creators' },
   { attribute: 'objectAssignee' },
   { attribute: 'objectParticipant' },
@@ -52,6 +53,15 @@ export const draftsListQuery = graphql`
             entity_type
             id
             name
+          }
+          workflowInstance {
+            currentStatus {
+              id
+              template {
+                name
+                color
+              }
+            }
           }
         }
       }
