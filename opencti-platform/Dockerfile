@@ -1,90 +1,135 @@
 FROM node:22-alpine AS base
 
-RUN corepack enable
 
-FROM base AS graphql-deps-builder
+##############################
+### Build builder
+##############################
 
-WORKDIR /opt/opencti-build/opencti-graphql
-COPY opencti-graphql/package.json opencti-graphql/yarn.lock ../.yarnrc.yml ./
-COPY opencti-graphql/patch ./patch
-RUN set -ex; \
-    apk add --no-cache git tini gcc g++ make musl-dev cargo python3 python3-dev postfix postfix-pcre \
-    && npm install -g node-gyp \
-    && yarn install --immutable && yarn cache clean --all
+FROM base AS builder
+
+# For layer optimisation, start by installing resources not dependant from source code
+RUN set -eux; \
+    apk add --no-cache g++ make python3 python3-dev; \
+    npm install -g node-gyp; \
+    npm install -g corepack
+
+COPY .yarnrc.yml /opt/opencti/
 
 
-FROM base AS graphql-builder
+##############################
+### Build back
+##############################
 
-WORKDIR /opt/opencti-build/opencti-graphql
-COPY opencti-graphql/package.json opencti-graphql/yarn.lock ../.yarnrc.yml ./
-COPY opencti-graphql/patch ./patch
-RUN set -ex; \
-    apk add --no-cache git tini gcc g++ make musl-dev cargo python3 python3-dev postfix postfix-pcre \
-    && rm -f /usr/lib/python3.11/EXTERNALLY-MANAGED \
-    && rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED \
-    && npm install -g node-gyp \
-    && yarn install
-COPY opencti-graphql /opt/opencti-build/opencti-graphql
+FROM builder AS builder-back
+
+# TAG_VERSION used to generate connector manifest on a tag during yarn build. Default to rolling manifest
+ARG TAG_VERSION
+ENV TAG_VERSION="${TAG_VERSION}"
+
+WORKDIR /opt/opencti/opencti-graphql
+
+# Copy sources necessary for install (preserve cache if no dependency changes)
+COPY opencti-graphql/package.json opencti-graphql/yarn.lock opencti-graphql/patch ./
+COPY opencti-graphql/patch/ ./patch/
+
+RUN yarn install --immutable
+
+# Copy all remaining sources
+COPY opencti-graphql/ ./
 RUN yarn build:prod
 
+##############################
+### Build front
+##############################
 
-FROM base AS front-builder
+FROM builder AS builder-front
+WORKDIR /opt/opencti/opencti-front
 
-WORKDIR /opt/opencti-build/opencti-front
+# Copy sources necessary for install (preserve cache if no dependency changes)
+COPY opencti-front/package.json opencti-front/yarn.lock ./
+COPY opencti-front/packages/ ./packages/
 
-COPY opencti-front/package.json opencti-front/yarn.lock ../.yarnrc.yml ./
-COPY opencti-front/.yarn ./.yarn
-COPY opencti-front/packages ./packages
-RUN set -ex; \
-    apk add --no-cache git tini gcc g++ make musl-dev cargo python3 python3-dev postfix postfix-pcre \
-    && rm -f /usr/lib/python3.11/EXTERNALLY-MANAGED \
-    && rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED \
-    && npm install -g node-gyp \
-&& yarn install
+RUN yarn install --immutable
 
-COPY opencti-front /opt/opencti-build/opencti-front
-COPY opencti-graphql/config/schema/opencti.graphql /opt/opencti-build/opencti-graphql/config/schema/opencti.graphql
+# Copy all remaining sources
+COPY opencti-front/ ./
+RUN set -eux; \
+    mkdir -p ../opencti-graphql/public; \
+    yarn build
 
-RUN yarn build:standalone
+##############################
+### Build the testing image
+##############################
 
+FROM builder AS testing
+
+COPY opencti-graphql/src/python/requirements.txt /opt/opencti/src/python/requirements.txt
+
+RUN apk add --no-cache tini python3 python3-dev libmagic
+RUN set -eux; \
+    apk add --no-cache gcc git; \
+    rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED; \
+    python3 -m ensurepip; \
+    rm -rv /usr/lib/python*/ensurepip; \
+    pip3 install --no-cache-dir --upgrade pip setuptools wheel; \
+    ln -sf python3 /usr/bin/python; \
+    pip3 install --no-cache-dir --requirement /opt/opencti/src/python/requirements.txt ; \
+    apk del gcc git
+
+WORKDIR /opt/opencti
+
+COPY --from=builder-back /opt/opencti/opencti-graphql/ ./
+COPY --from=builder-front /opt/opencti/opencti-graphql/public/ ./public/
+
+ENV PYTHONUNBUFFERED="1"
+ENV NODE_OPTIONS="--max_old_space_size=12288"
+
+RUN set -eux; \
+    install -m 0777 -d '/opt/opencti/logs'; \
+    install -m 0777 -d '/opt/opencti/telemetry'; \
+    install -m 0777 -d '/opt/opencti/.support'
+
+VOLUME ["/opt/opencti/logs", "/opt/opencti/telemetry", "/opt/opencti/.support"]
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "build/back.js"]
+
+
+##############################
+### Build production image
+##############################
 
 FROM base AS app
 
-RUN set -ex; \
-    apk add --no-cache git tini gcc g++ make musl-dev cargo python3 python3-dev postfix postfix-pcre \
-    && rm -f /usr/lib/python3.11/EXTERNALLY-MANAGED \
-    && rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED \
-    && python3 -m ensurepip \
-    && rm -rv /usr/lib/python*/ensurepip \
-    && pip3 install --no-cache-dir --upgrade pip setuptools wheel \
-    && ln -sf python3 /usr/bin/python
+COPY opencti-graphql/src/python/requirements.txt /opt/opencti/src/python/requirements.txt
+
+RUN apk add --no-cache tini python3 python3-dev
+RUN set -eux; \
+    apk add --no-cache gcc git; \
+    rm -f /usr/lib/python3.12/EXTERNALLY-MANAGED; \
+    python3 -m ensurepip; \
+    rm -rv /usr/lib/python*/ensurepip; \
+    pip3 install --no-cache-dir --upgrade pip setuptools wheel; \
+    ln -sf python3 /usr/bin/python; \
+    pip3 install --no-cache-dir --requirement /opt/opencti/src/python/requirements.txt ; \
+    apk del gcc git
+
 WORKDIR /opt/opencti
 
-COPY opencti-graphql/src/python/requirements.txt ./src/python/requirements.txt
+COPY --from=builder-back /opt/opencti/opencti-graphql/build/ ./build/
+COPY --from=builder-back /opt/opencti/opencti-graphql/static/ ./static/
+COPY --from=builder-front /opt/opencti/opencti-graphql/public/ ./public/
+COPY opencti-graphql/src/python/ ./src/python/
+COPY opencti-graphql/config/ ./config/
 
-RUN pip3 install --no-cache-dir --requirement ./src/python/requirements.txt \
-    && pip3 install \
-        --no-cache-dir \
-        --upgrade \
-        --force 'git+https://github.com/OpenCTI-Platform/opencti@master#subdirectory=client-python' \
-    && apk del git gcc musl-dev
+ENV PYTHONUNBUFFERED="1"
+ENV NODE_OPTIONS="--max_old_space_size=12288"
+ENV NODE_ENV="production"
 
-COPY --from=graphql-deps-builder /opt/opencti-build/opencti-graphql/node_modules ./node_modules
-COPY --from=graphql-builder /opt/opencti-build/opencti-graphql/build ./build
-COPY --from=graphql-builder /opt/opencti-build/opencti-graphql/static ./static
-COPY --from=front-builder /opt/opencti-build/opencti-front/builder/prod/build ./public
-COPY opencti-graphql/src ./src
-COPY opencti-graphql/config ./config
-COPY opencti-graphql/script ./script
-
-ENV PYTHONUNBUFFERED=1
-ENV NODE_OPTIONS=--max_old_space_size=12288
-ENV NODE_ENV=production
-
-RUN set -ex; \
-    install -m 0777 -d '/opt/opencti/logs' \
-    && install -m 0777 -d '/opt/opencti/telemetry' \
-    && install -m 0777 -d '/opt/opencti/.support'
+RUN set -eux; \
+    install -m 0777 -d '/opt/opencti/logs'; \
+    install -m 0777 -d '/opt/opencti/telemetry'; \
+    install -m 0777 -d '/opt/opencti/.support'
 
 VOLUME ["/opt/opencti/logs", "/opt/opencti/telemetry", "/opt/opencti/.support"]
 

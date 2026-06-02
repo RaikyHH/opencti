@@ -74,7 +74,7 @@ jobs:
       uses: docker/build-push-action@v7
       with:
         context: opencti-platform
-        file: opencti-platform/Dockerfile_featurebranch
+        file: opencti-platform/Dockerfile
         target: ${{ inputs.dockerfile_target }}
         push: ${{ inputs.publish_to_registry == 'true' }}
         outputs: ${{ inputs.publish_to_registry == 'false' && 'type=docker,dest=/tmp/opencti-platform.tar' }}
