@@ -19,6 +19,7 @@ import ExpandableMarkdown from '../../../components/ExpandableMarkdown';
 import FieldOrEmpty from '../../../components/FieldOrEmpty';
 import Tag from '@common/tag/Tag';
 import { StixCoreObjectsCustomAttributesQuery$data } from '@components/common/stix_core_objects/__generated__/StixCoreObjectsCustomAttributesQuery.graphql';
+import { entityTypeRenderers } from '../../../utils/widget/widgetCustomAttributesRendererUtils';
 
 export type StixCoreObject = NonNullable<StixCoreObjectsCustomAttributesQuery$data['stixCoreObject']>;
 
@@ -41,6 +42,11 @@ const renderAttributeValue = (
         —
       </Typography>
     );
+  }
+
+  const specificRenderer = entityTypeRenderers[entityType]?.[attribute];
+  if (specificRenderer) {
+    return specificRenderer(data, t_i18n, fldt);
   }
 
   switch (attribute) {
