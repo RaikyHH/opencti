@@ -5,6 +5,8 @@ import { Formik, Form, Field } from 'formik';
 import { compose } from 'ramda';
 import * as Yup from 'yup';
 import withStyles from '@mui/styles/withStyles';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Switch from '@mui/material/Switch';
 import Button from '@common/button/Button';
 import { commitMutation, MESSAGING$ } from '../../../../../relay/environment';
 import inject18n from '../../../../../components/i18n';
@@ -59,8 +61,19 @@ class UserEditionPasswordComponent extends Component {
     });
   }
 
+  handleToggleForcePasswordChange(event) {
+    commitMutation({
+      mutation: userMutationFieldPatch,
+      variables: {
+        id: this.props.user.id,
+        input: { key: 'force_password_change', value: [String(event.target.checked)] },
+      },
+    });
+  }
+
   render() {
     const { classes, t } = this.props;
+    const external = this.props.user.external === true;
     const initialValues = { password: '', confirmation: '' };
     return (
       <Formik
@@ -88,6 +101,18 @@ class UserEditionPasswordComponent extends Component {
               type="password"
               fullWidth={true}
               style={{ marginTop: 20 }}
+            />
+            <FormControlLabel
+              style={{ marginLeft: 0, marginTop: 30 }}
+              control={(
+                <Switch
+                  checked={this.props.user.force_password_change ?? false}
+                  onChange={this.handleToggleForcePasswordChange.bind(this)}
+                  disabled={external}
+                  color="primary"
+                />
+              )}
+              label={t('Force password change on next login')}
             />
             <div className={classes.buttons}>
               <Button
@@ -120,6 +145,8 @@ const UserEditionPassword = createFragmentContainer(
     user: graphql`
       fragment UserEditionPassword_user on User {
         id
+        external
+        force_password_change
       }
     `,
   },
