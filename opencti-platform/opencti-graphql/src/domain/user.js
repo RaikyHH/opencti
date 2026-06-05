@@ -14,7 +14,16 @@ import conf, {
   getRequestAuditHeaders,
   logApp,
 } from '../config/conf';
-import { AuthenticationFailure, ConfigurationError, DatabaseError, DraftLockedError, ForbiddenAccess, FunctionalError, UnsupportedError } from '../config/errors';
+import {
+  AuthenticationFailure,
+  ConfigurationError,
+  DatabaseError,
+  DraftLockedError,
+  ForbiddenAccess,
+  FunctionalError,
+  PasswordChangeRequired,
+  UnsupportedError,
+} from '../config/errors';
 import { getEntitiesListFromCache, getEntitiesMapFromCache, getEntityFromCache } from '../database/cache';
 import { elLoadBy, elRawDeleteByQuery } from '../database/engine';
 import { createEntity, createRelation, deleteElementById, deleteRelationsByFromAndTo, patchAttribute, updateAttribute, updatedInputsToData } from '../database/middleware';
@@ -927,6 +936,9 @@ export const userEditField = async (context, user, userId, rawInputs) => {
     }
     if (userToUpdate.external && input.key === 'user_email') {
       throw FunctionalError('Email cannot be updated for external user', { userId });
+    }
+    if (userToUpdate.external && input.key === 'force_password_change' && R.head(input.value) === true) {
+      throw FunctionalError('Password change cannot be forced for external user', { userId });
     }
     if (input.key === 'password') {
       const userServiceAccountInput = rawInputs.find((x) => x.key === 'user_service_account');
@@ -1889,6 +1901,10 @@ const validateUser = (user, settings) => {
   // Validate user's account status
   if (user.account_status !== ACCOUNT_STATUS_ACTIVE) {
     throw AuthenticationFailure(ACCOUNT_STATUSES[user.account_status]);
+  }
+  // Require users flagged by an admin to update their password before using the platform
+  if (user.force_password_change === true) {
+    throw PasswordChangeRequired();
   }
 };
 
