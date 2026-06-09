@@ -263,6 +263,7 @@ const meUserFragment = graphql`
     }
     can_manage_sensitive_config
     unsubscribed_news_feed_types
+    force_password_change
   }
 `;
 

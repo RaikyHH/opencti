@@ -1887,9 +1887,12 @@ const internalAuthenticateUser = async (context, req, user) => {
  *
  * @param {AuthUser} user
  * @param {Object} settings
+ * @param {Object} [opts]
+ * @param {boolean} [opts.skipForcePasswordCheck] - When true, skips the force_password_change check.
+ *   Used at session creation so the user can authenticate and be redirected to the password screen.
  * @throws {AuthenticationFailure} if the user has an invalid account status.
  */
-const validateUser = (user, settings) => {
+const validateUser = (user, settings, { skipForcePasswordCheck = false } = {}) => {
   // Check organization consistency
   if (!isBypassUser(user) && settings.platform_organization && user.organizations.length === 0 && !user.user_service_account) {
     throw AuthenticationFailure('You can\'t login without an organization');
@@ -1902,8 +1905,9 @@ const validateUser = (user, settings) => {
   if (user.account_status !== ACCOUNT_STATUS_ACTIVE) {
     throw AuthenticationFailure(ACCOUNT_STATUSES[user.account_status]);
   }
-  // Require users flagged by an admin to update their password before using the platform
-  if (user.force_password_change === true) {
+  // Require users flagged by an admin to update their password before using the platform.
+  // Skipped at session creation so the user can authenticate and be redirected to the change-password screen.
+  if (!skipForcePasswordCheck && user.force_password_change === true) {
     throw PasswordChangeRequired();
   }
 };
@@ -1941,7 +1945,7 @@ export const sessionAuthenticateUser = async (context, req, user, provider) => {
     logged = platformUsers.get(user.internal_id);
   }
   const settings = await getEntityFromCache(context, SYSTEM_USER, ENTITY_TYPE_SETTINGS);
-  validateUser(logged, settings);
+  validateUser(logged, settings, { skipForcePasswordCheck: true });
   const withOrigin = userWithOrigin(req, logged);
   const numberOfKilledSessions = await enforceSessionLimit(withOrigin, settings);
   // Build and save the session
