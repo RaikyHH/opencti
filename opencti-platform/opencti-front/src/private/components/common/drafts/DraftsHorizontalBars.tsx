@@ -1,18 +1,20 @@
-import React from 'react';
+import ApexCharts from 'apexcharts';
+import { CSSProperties, ReactNode, useState } from 'react';
 import { graphql } from 'react-relay';
 import { QueryRenderer } from '../../../../relay/environment';
 import { useFormatter } from '../../../../components/i18n';
-import useGranted, { SETTINGS_SETACCESSES } from '../../../../utils/hooks/useGranted';
 import WidgetContainer from '../../../../components/dashboard/WidgetContainer';
 import WidgetNoData from '../../../../components/dashboard/WidgetNoData';
-import WidgetDistributionList from '../../../../components/dashboard/WidgetDistributionList';
-import { getMainRepresentative, isFieldForIdentifier } from '../../../../utils/defaultRepresentatives';
+import WidgetHorizontalBars from '../../../../components/dashboard/WidgetHorizontalBars';
+import useDistributionGraphData from '../../../../utils/hooks/useDistributionGraphData';
 import Loader, { LoaderVariant } from '../../../../components/Loader';
 import useDashboardViz from '../../../../components/dashboard/useDashboardViz';
 import WidgetNoHostEntity from '../../../../components/dashboard/WidgetNoHostEntity';
+import type { WidgetDataSelection, WidgetHost, WidgetParameters } from '../../../../utils/widget/widget';
+import { DraftsHorizontalBarsDistributionQuery$data } from './__generated__/DraftsHorizontalBarsDistributionQuery.graphql';
 
-const draftsDistributionListQuery = graphql`
-  query DraftsDistributionListQuery(
+const draftsHorizontalBarsDistributionQuery = graphql`
+  query DraftsHorizontalBarsDistributionQuery(
     $field: String!
     $startDate: DateTime
     $endDate: DateTime
@@ -42,9 +44,11 @@ const draftsDistributionListQuery = graphql`
           entity_type
         }
         ... on Creator {
+          id
           name
         }
         ... on Group {
+          id
           name
         }
       }
@@ -52,7 +56,7 @@ const draftsDistributionListQuery = graphql`
   }
 `;
 
-const DraftsDistributionList = ({
+const DraftsHorizontalBars = ({
   variant,
   height,
   startDate,
@@ -61,9 +65,19 @@ const DraftsDistributionList = ({
   parameters = {},
   popover,
   host,
+}: {
+  variant?: string;
+  height?: CSSProperties['height'];
+  startDate: string | null | undefined;
+  endDate: string | null | undefined;
+  dataSelection: WidgetDataSelection[];
+  parameters?: WidgetParameters;
+  popover?: ReactNode;
+  host?: WidgetHost;
 }) => {
   const { t_i18n } = useFormatter();
-  const hasSetAccess = useGranted([SETTINGS_SETACCESSES]);
+  const [chart, setChart] = useState<ApexCharts>();
+  const { buildWidgetProps } = useDistributionGraphData();
   const { resolvedDataSelection, isMissingHostEntity, isPreviewMode } = useDashboardViz({
     perspective: 'entities',
     dataSelection,
@@ -77,7 +91,7 @@ const DraftsDistributionList = ({
     const selection = resolvedDataSelection[0];
     return (
       <QueryRenderer
-        query={draftsDistributionListQuery}
+        query={draftsHorizontalBarsDistributionQuery}
         variables={{
           field: selection.attribute,
           operation: 'count',
@@ -89,23 +103,17 @@ const DraftsDistributionList = ({
           filters: selection.filters,
           limit: selection.number ?? 10,
         }}
-        render={({ props }) => {
+        render={({ props }: { props: DraftsHorizontalBarsDistributionQuery$data }) => {
           if (props && props.draftWorkspacesDistribution && props.draftWorkspacesDistribution.length > 0) {
-            const data = props.draftWorkspacesDistribution.map((n) => {
-              let { label } = n;
-              if (isFieldForIdentifier(selection.attribute)) {
-                label = getMainRepresentative(n.entity) || n.label;
-              } else if (selection.attribute === 'entity_type' && t_i18n(`entity_${n.label}`) !== `entity_${n.label}`) {
-                label = t_i18n(`entity_${n.label}`);
-              }
-              return {
-                label,
-                value: n.value,
-                id: isFieldForIdentifier(selection.attribute) ? n.entity?.id : null,
-                type: n.entity?.entity_type ?? n.label,
-              };
-            });
-            return <WidgetDistributionList data={data} hasSettingAccess={hasSetAccess} />;
+            const { series, redirectionUtils } = buildWidgetProps(props.draftWorkspacesDistribution, selection, 'Number of draft workspaces');
+            return (
+              <WidgetHorizontalBars
+                series={series}
+                distributed={parameters.distributed ?? undefined}
+                redirectionUtils={redirectionUtils}
+                onMounted={setChart}
+              />
+            );
           }
           if (props) {
             return <WidgetNoData />;
@@ -118,9 +126,11 @@ const DraftsDistributionList = ({
 
   return (
     <WidgetContainer
+      padding="small"
       height={height}
       title={parameters.title ?? t_i18n('Distribution of draft workspaces')}
       variant={variant}
+      chart={chart}
       action={popover}
       showPreviewTag={isPreviewMode}
     >
@@ -129,4 +139,4 @@ const DraftsDistributionList = ({
   );
 };
 
-export default DraftsDistributionList;
+export default DraftsHorizontalBars;

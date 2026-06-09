@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, ReactNode, CSSProperties } from 'react';
 import { graphql } from 'react-relay';
 import { QueryRenderer } from '../../../../relay/environment';
 import { useFormatter } from '../../../../components/i18n';
@@ -6,13 +6,15 @@ import { monthsAgo, now } from '../../../../utils/Time';
 import { buildFiltersAndOptionsForWidgets } from '../../../../utils/filters/filtersUtils';
 import WidgetContainer from '../../../../components/dashboard/WidgetContainer';
 import WidgetNoData from '../../../../components/dashboard/WidgetNoData';
-import WidgetVerticalBars from '../../../../components/dashboard/WidgetVerticalBars';
+import WidgetMultiAreas from '../../../../components/dashboard/WidgetMultiAreas';
 import Loader, { LoaderVariant } from '../../../../components/Loader';
 import useDashboardViz from '../../../../components/dashboard/useDashboardViz';
 import WidgetNoHostEntity from '../../../../components/dashboard/WidgetNoHostEntity';
+import type { WidgetDataSelection, WidgetHost, WidgetParameters } from '../../../../utils/widget/widget';
+import { DraftsMultiAreaChartTimeSeriesQuery$data } from './__generated__/DraftsMultiAreaChartTimeSeriesQuery.graphql';
 
-const draftsMultiVerticalBarsTimeSeriesQuery = graphql`
-  query DraftsMultiVerticalBarsTimeSeriesQuery(
+const draftsMultiAreaChartTimeSeriesQuery = graphql`
+  query DraftsMultiAreaChartTimeSeriesQuery(
     $field: String!
     $operation: StatsOperation!
     $startDate: DateTime!
@@ -36,7 +38,7 @@ const draftsMultiVerticalBarsTimeSeriesQuery = graphql`
   }
 `;
 
-const DraftsMultiVerticalBars = ({
+const DraftsMultiAreaChart = ({
   variant,
   height,
   startDate,
@@ -45,9 +47,18 @@ const DraftsMultiVerticalBars = ({
   parameters = {},
   popover,
   host,
+}: {
+  variant?: string;
+  height?: CSSProperties['height'];
+  startDate: string | null | undefined;
+  endDate: string | null | undefined;
+  dataSelection: WidgetDataSelection[];
+  parameters?: WidgetParameters;
+  popover?: ReactNode;
+  host?: WidgetHost;
 }) => {
   const { t_i18n } = useFormatter();
-  const [chart, setChart] = useState();
+  const [chart, setChart] = useState<ApexCharts>();
   const { resolvedDataSelection, isMissingHostEntity, isPreviewMode } = useDashboardViz({
     perspective: 'entities',
     dataSelection,
@@ -79,22 +90,22 @@ const DraftsMultiVerticalBars = ({
     }
     return (
       <QueryRenderer
-        query={draftsMultiVerticalBarsTimeSeriesQuery}
+        query={draftsMultiAreaChartTimeSeriesQuery}
         variables={variables}
-        render={({ props }) => {
+        render={({ props }: { props: DraftsMultiAreaChartTimeSeriesQuery$data }) => {
           if (props && props.draftWorkspacesTimeSeries) {
             return (
-              <WidgetVerticalBars
+              <WidgetMultiAreas
                 series={[{
                   name: selection?.label || t_i18n('Number of draft workspaces'),
                   data: props.draftWorkspacesTimeSeries.map((entry) => ({
-                    x: new Date(entry.date),
-                    y: entry.value,
+                    x: new Date(entry?.date),
+                    y: entry?.value,
                   })),
                 }]}
                 interval={parameters.interval}
-                isStacked={parameters.stacked}
-                hasLegend={parameters.legend}
+                isStacked={parameters.stacked ?? undefined}
+                hasLegend={parameters.legend ?? undefined}
                 onMounted={setChart}
               />
             );
@@ -123,4 +134,4 @@ const DraftsMultiVerticalBars = ({
   );
 };
 
-export default DraftsMultiVerticalBars;
+export default DraftsMultiAreaChart;

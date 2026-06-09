@@ -1,5 +1,6 @@
+import ApexCharts from 'apexcharts';
 import { graphql } from 'react-relay';
-import { useState } from 'react';
+import { CSSProperties, ReactNode, useState } from 'react';
 import { QueryRenderer } from '../../../../relay/environment';
 import { useFormatter } from '../../../../components/i18n';
 import WidgetContainer from '../../../../components/dashboard/WidgetContainer';
@@ -8,6 +9,8 @@ import WidgetDonut from '../../../../components/dashboard/WidgetDonut';
 import Loader, { LoaderVariant } from '../../../../components/Loader';
 import useDashboardViz from '../../../../components/dashboard/useDashboardViz';
 import WidgetNoHostEntity from '../../../../components/dashboard/WidgetNoHostEntity';
+import type { WidgetDataSelection, WidgetHost, WidgetParameters } from '../../../../utils/widget/widget';
+import { DraftsDonutDistributionQuery$data } from './__generated__/DraftsDonutDistributionQuery.graphql';
 
 const draftsDonutDistributionQuery = graphql`
   query DraftsDonutDistributionQuery(
@@ -59,9 +62,18 @@ const DraftsDonut = ({
   parameters = {},
   popover,
   host,
+}: {
+  variant?: string;
+  height?: CSSProperties['height'];
+  startDate: string | null | undefined;
+  endDate: string | null | undefined;
+  dataSelection: WidgetDataSelection[];
+  parameters?: WidgetParameters;
+  popover?: ReactNode;
+  host?: WidgetHost;
 }) => {
   const { t_i18n } = useFormatter();
-  const [chart, setChart] = useState();
+  const [chart, setChart] = useState<ApexCharts>();
   const { resolvedDataSelection, isMissingHostEntity, isPreviewMode } = useDashboardViz({
     perspective: 'entities',
     dataSelection,
@@ -87,12 +99,13 @@ const DraftsDonut = ({
           filters: selection.filters,
           limit: selection.number ?? 10,
         }}
-        render={({ props }) => {
+        render={({ props }: { props: DraftsDonutDistributionQuery$data }) => {
           if (props && props.draftWorkspacesDistribution && props.draftWorkspacesDistribution.length > 0) {
             return (
               <WidgetDonut
-                data={props.draftWorkspacesDistribution}
-                groupBy={selection.attribute}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                data={props.draftWorkspacesDistribution as any[]}
+                groupBy={selection.attribute || 'entity_type'}
                 onMounted={setChart}
               />
             );

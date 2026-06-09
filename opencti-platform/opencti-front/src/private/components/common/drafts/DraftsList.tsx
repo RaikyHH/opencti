@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { CSSProperties, ReactNode, useRef } from 'react';
 import { graphql } from 'react-relay';
 import { useFormatter } from '../../../../components/i18n';
 import { QueryRenderer } from '../../../../relay/environment';
@@ -9,8 +9,10 @@ import WidgetListCoreObjects from '../../../../components/dashboard/WidgetListCo
 import Loader, { LoaderVariant } from '../../../../components/Loader';
 import useDashboardViz from '../../../../components/dashboard/useDashboardViz';
 import WidgetNoHostEntity from '../../../../components/dashboard/WidgetNoHostEntity';
+import type { WidgetColumn, WidgetDataSelection, WidgetHost, WidgetParameters } from '../../../../utils/widget/widget';
+import { DraftsListQuery$data } from './__generated__/DraftsListQuery.graphql';
 
-const defaultDraftColumns = [
+const defaultDraftColumns: WidgetColumn[] = [
   { attribute: 'name', label: 'Name' },
   { attribute: 'draft_status', label: 'Status' },
   { attribute: 'workflowInstance', label: 'Workflow status' },
@@ -80,6 +82,17 @@ const DraftsList = ({
   parameters = {},
   popover,
   host,
+}: {
+  title?: string;
+  variant?: string;
+  height?: CSSProperties['height'];
+  startDate: string | null | undefined;
+  endDate: string | null | undefined;
+  dataSelection: WidgetDataSelection[];
+  widgetId: string;
+  parameters?: WidgetParameters;
+  popover?: ReactNode;
+  host?: WidgetHost;
 }) => {
   const { t_i18n } = useFormatter();
   const { resolvedDataSelection, isMissingHostEntity, isPreviewMode } = useDashboardViz({
@@ -88,7 +101,7 @@ const DraftsList = ({
     host,
   });
   const selection = resolvedDataSelection[0];
-  const columns = selection.columns ?? defaultDraftColumns;
+  const columns: WidgetColumn[] = selection.columns ? [...selection.columns] : defaultDraftColumns;
 
   const sortBy = selection.sort_by && selection.sort_by.length > 0
     ? selection.sort_by
@@ -121,11 +134,11 @@ const DraftsList = ({
                   orderMode: selection.sort_mode ?? 'desc',
                   filters,
                 }}
-                render={({ props }) => {
+                render={({ props }: { props: DraftsListQuery$data }) => {
                   if (props && props.draftWorkspaces && props.draftWorkspaces.edges.length > 0) {
                     return (
                       <WidgetListCoreObjects
-                        data={props.draftWorkspaces.edges}
+                        data={[...props.draftWorkspaces.edges]}
                         rootRef={rootRef.current ?? undefined}
                         widgetId={widgetId}
                         pageSize={selection.number ?? 10}

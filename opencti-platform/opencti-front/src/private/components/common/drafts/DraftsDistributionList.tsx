@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
+import { CSSProperties, ReactNode } from 'react';
 import { graphql } from 'react-relay';
 import { QueryRenderer } from '../../../../relay/environment';
 import { useFormatter } from '../../../../components/i18n';
+import useGranted, { SETTINGS_SETACCESSES } from '../../../../utils/hooks/useGranted';
 import WidgetContainer from '../../../../components/dashboard/WidgetContainer';
 import WidgetNoData from '../../../../components/dashboard/WidgetNoData';
-import WidgetHorizontalBars from '../../../../components/dashboard/WidgetHorizontalBars';
-import useDistributionGraphData from '../../../../utils/hooks/useDistributionGraphData';
+import WidgetDistributionList from '../../../../components/dashboard/WidgetDistributionList';
+import { getMainRepresentative, isFieldForIdentifier } from '../../../../utils/defaultRepresentatives';
 import Loader, { LoaderVariant } from '../../../../components/Loader';
 import useDashboardViz from '../../../../components/dashboard/useDashboardViz';
 import WidgetNoHostEntity from '../../../../components/dashboard/WidgetNoHostEntity';
+import type { WidgetDataSelection, WidgetHost, WidgetParameters } from '../../../../utils/widget/widget';
+import { DraftsDistributionListQuery$data } from './__generated__/DraftsDistributionListQuery.graphql';
 
-const draftsHorizontalBarsDistributionQuery = graphql`
-  query DraftsHorizontalBarsDistributionQuery(
+const draftsDistributionListQuery = graphql`
+  query DraftsDistributionListQuery(
     $field: String!
     $startDate: DateTime
     $endDate: DateTime
@@ -41,11 +44,9 @@ const draftsHorizontalBarsDistributionQuery = graphql`
           entity_type
         }
         ... on Creator {
-          id
           name
         }
         ... on Group {
-          id
           name
         }
       }
@@ -53,7 +54,7 @@ const draftsHorizontalBarsDistributionQuery = graphql`
   }
 `;
 
-const DraftsHorizontalBars = ({
+const DraftsDistributionList = ({
   variant,
   height,
   startDate,
@@ -62,10 +63,18 @@ const DraftsHorizontalBars = ({
   parameters = {},
   popover,
   host,
+}: {
+  variant?: string;
+  height?: CSSProperties['height'];
+  startDate: string | null | undefined;
+  endDate: string | null | undefined;
+  dataSelection: WidgetDataSelection[];
+  parameters?: WidgetParameters;
+  popover?: ReactNode;
+  host?: WidgetHost;
 }) => {
   const { t_i18n } = useFormatter();
-  const [chart, setChart] = useState();
-  const { buildWidgetProps } = useDistributionGraphData();
+  const hasSetAccess = useGranted([SETTINGS_SETACCESSES]);
   const { resolvedDataSelection, isMissingHostEntity, isPreviewMode } = useDashboardViz({
     perspective: 'entities',
     dataSelection,
@@ -79,7 +88,7 @@ const DraftsHorizontalBars = ({
     const selection = resolvedDataSelection[0];
     return (
       <QueryRenderer
-        query={draftsHorizontalBarsDistributionQuery}
+        query={draftsDistributionListQuery}
         variables={{
           field: selection.attribute,
           operation: 'count',
@@ -91,17 +100,23 @@ const DraftsHorizontalBars = ({
           filters: selection.filters,
           limit: selection.number ?? 10,
         }}
-        render={({ props }) => {
+        render={({ props }: { props: DraftsDistributionListQuery$data }) => {
           if (props && props.draftWorkspacesDistribution && props.draftWorkspacesDistribution.length > 0) {
-            const { series, redirectionUtils } = buildWidgetProps(props.draftWorkspacesDistribution, selection, 'Number of draft workspaces');
-            return (
-              <WidgetHorizontalBars
-                series={series}
-                distributed={parameters.distributed}
-                redirectionUtils={redirectionUtils}
-                onMounted={setChart}
-              />
-            );
+            const data = props.draftWorkspacesDistribution.map((n) => {
+              let label = n?.label;
+              if (isFieldForIdentifier(selection.attribute ?? undefined)) {
+                label = getMainRepresentative(n?.entity) || n?.label;
+              } else if (selection.attribute === 'entity_type' && t_i18n(`entity_${n?.label}`) !== `entity_${n?.label}`) {
+                label = t_i18n(`entity_${n?.label}`);
+              }
+              return {
+                label,
+                value: n?.value,
+                id: isFieldForIdentifier(selection.attribute ?? undefined) ? n?.entity?.id : null,
+                type: n?.entity?.entity_type ?? n?.label,
+              };
+            });
+            return <WidgetDistributionList data={data} hasSettingAccess={hasSetAccess} />;
           }
           if (props) {
             return <WidgetNoData />;
@@ -114,11 +129,9 @@ const DraftsHorizontalBars = ({
 
   return (
     <WidgetContainer
-      padding="small"
       height={height}
       title={parameters.title ?? t_i18n('Distribution of draft workspaces')}
       variant={variant}
-      chart={chart}
       action={popover}
       showPreviewTag={isPreviewMode}
     >
@@ -127,4 +140,4 @@ const DraftsHorizontalBars = ({
   );
 };
 
-export default DraftsHorizontalBars;
+export default DraftsDistributionList;

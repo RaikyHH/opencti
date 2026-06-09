@@ -1,3 +1,4 @@
+import { CSSProperties, ReactNode } from 'react';
 import { graphql } from 'react-relay';
 import { QueryRenderer } from '../../../../relay/environment';
 import { useFormatter } from '../../../../components/i18n';
@@ -10,6 +11,8 @@ import useEntityTranslation from '../../../../utils/hooks/useEntityTranslation';
 import WidgetNumber from '../../../../components/dashboard/WidgetNumber';
 import useDashboardViz from '../../../../components/dashboard/useDashboardViz';
 import WidgetNoHostEntity from '../../../../components/dashboard/WidgetNoHostEntity';
+import type { WidgetDataSelection, WidgetHost, WidgetParameters } from '../../../../utils/widget/widget';
+import { DraftsNumberQuery$data } from './__generated__/DraftsNumberQuery.graphql';
 
 const draftsNumberQuery = graphql`
   query DraftsNumberQuery(
@@ -42,6 +45,16 @@ const DraftsNumber = ({
   variant,
   height,
   host,
+}: {
+  startDate: string | null | undefined;
+  endDate: string | null | undefined;
+  dataSelection: WidgetDataSelection[];
+  parameters?: WidgetParameters;
+  entityType?: string;
+  popover?: ReactNode;
+  variant?: string;
+  height?: CSSProperties['height'];
+  host?: WidgetHost;
 }) => {
   const { t_i18n } = useFormatter();
   const { translateEntityType } = useEntityTranslation();
@@ -76,34 +89,34 @@ const DraftsNumber = ({
       {isMissingHostEntity
         ? <WidgetNoHostEntity host={host} />
         : (
-          <QueryRenderer
-            query={draftsNumberQuery}
-            variables={{
-              dateAttribute,
-              filters,
-              startDate,
-              endDate: dayAgo(),
-            }}
-            render={({ props }) => {
-              if (props && props.draftWorkspacesNumber) {
-                const { total, count } = props.draftWorkspacesNumber;
-                return (
-                  <WidgetNumber
-                    entityType={entityType}
-                    label={translatedTitle}
-                    value={total}
-                    diffLabel={t_i18n('24 hours')}
-                    diffValue={total - count}
-                  />
-                );
-              }
-              if (props) {
-                return <WidgetNoData />;
-              }
-              return <Loader variant={LoaderVariant.inElement} />;
-            }}
-          />
-        )}
+            <QueryRenderer
+              query={draftsNumberQuery}
+              variables={{
+                dateAttribute,
+                filters,
+                startDate,
+                endDate: endDate ?? dayAgo(),
+              }}
+              render={({ props }: { props: DraftsNumberQuery$data }) => {
+                if (props && props.draftWorkspacesNumber) {
+                  const { total, count } = props.draftWorkspacesNumber;
+                  return (
+                    <WidgetNumber
+                      entityType={entityType}
+                      label={translatedTitle}
+                      value={total}
+                      diffLabel={t_i18n('24 hours')}
+                      diffValue={total - count}
+                    />
+                  );
+                }
+                if (props) {
+                  return <WidgetNoData />;
+                }
+                return <Loader variant={LoaderVariant.inElement} />;
+              }}
+            />
+          )}
     </WidgetContainer>
   );
 };
