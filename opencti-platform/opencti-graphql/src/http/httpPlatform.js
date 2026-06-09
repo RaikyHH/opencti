@@ -128,6 +128,13 @@ const createApp = async (app, schema) => {
     }
   });
 
+  // -- robots.txt: disallow all crawlers on every path
+  app.get(`${basePath}/robots.txt`, (_req, res) => {
+    res.type('text/plain');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send('User-agent: *\nDisallow: /\n');
+  });
+
   app.use(compression({
     filter: (req, res) => res.getHeader('Content-Type') !== 'text/event-stream' && compressionFilter(req, res),
   }));
