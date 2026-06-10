@@ -5,7 +5,7 @@ import { CommentOutlined } from '@mui/icons-material';
 import ItemStatus from '../../../../components/ItemStatus';
 import { workflowStatusFragment } from './workflowStatus.graphql';
 import IconButton from '../../../../components/common/button/IconButton';
-import { workflowStatus_data$key } from './__generated__/workflowStatus_data.graphql';
+import { workflowStatus_data$key } from '@components/common/workflow/__generated__/WorkflowStatus_data.graphql';
 import { useFormatter } from '../../../../components/i18n';
 
 export { workflowStatusFragment } from './workflowStatus.graphql';
