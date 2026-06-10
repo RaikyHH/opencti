@@ -156,6 +156,12 @@ const availableWidgetColumns: Record<string, WidgetColumn[]> = {
   ],
 };
 
+const customAttributesExtraColumns: WidgetColumn[] = [
+  { attribute: 'description' },
+  { attribute: 'revoked' },
+  { attribute: 'confidence' },
+];
+
 type WidgetEntityType = 'relationships' | 'entities';
 
 export const getDefaultWidgetColumns = (type: WidgetEntityType, context?: WidgetHost): WidgetColumn[] => {
@@ -192,7 +198,7 @@ export const getDefaultCustomAttributesColumns = (entityType?: string): WidgetCo
 
 export const getCustomAttributesColumns = (entityType?: string): WidgetColumn[] => {
   if (entityType) {
-    const baseColumns = [...availableWidgetColumns.common];
+    const baseColumns = [...availableWidgetColumns.common, ...customAttributesExtraColumns];
 
     if (availableWidgetColumns[entityType]) {
       baseColumns.push(...availableWidgetColumns[entityType]);
@@ -201,7 +207,10 @@ export const getCustomAttributesColumns = (entityType?: string): WidgetColumn[] 
     return baseColumns;
   }
 
-  return availableWidgetColumns.common;
+  return [
+    ...availableWidgetColumns.common,
+    ...customAttributesExtraColumns,
+  ];
 };
 
 export const getWidgetColumns = (type: WidgetEntityType, entityType?: string, metrics?: readonly MetricsColumn[]): WidgetColumn[] => {
