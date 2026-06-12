@@ -33,9 +33,6 @@ const SavedFiltersAutocomplete = ({
   options,
   localStorageKey,
 }: SavedFiltersAutocompleteProps) => {
-  const { isFeatureEnable } = useHelper();
-  const isSharingSavedFilterFeatureEnabled = isFeatureEnable('SHARE_FILTERS');
-
   const hasSharingSavedFiltersCapability = useGranted(['KNOWLEDGE_KNSHAREFILTERS']);
 
   const theme = useTheme<Theme>();
@@ -69,18 +66,16 @@ const SavedFiltersAutocomplete = ({
           </Tooltip>
           {canManage && (
             <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center' }}>
-              {isSharingSavedFilterFeatureEnabled && (
-                <Tooltip title={t_i18n('Edit this saved filter')}>
-                  <IconButton
-                    color="primary"
-                    onClick={handleEdit(option.value)}
-                    size="small"
-                    sx={{ padding: '4px' }}
-                  >
-                    <EditOutlined sx={{ fontSize: 18 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
+              <Tooltip title={t_i18n('Edit this saved filter')}>
+                <IconButton
+                  color="primary"
+                  onClick={handleEdit(option.value)}
+                  size="small"
+                  sx={{ padding: '4px' }}
+                >
+                  <EditOutlined sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
               <Tooltip title={t_i18n('Delete this saved filter')}>
                 <IconButton
                   color="primary"
@@ -112,10 +107,7 @@ const SavedFiltersAutocomplete = ({
         isOptionEqualToValue={(option, v) => option?.value.id === v.value.id}
         inputValue={inputValue}
         options={options ?? []}
-        groupBy={isSharingSavedFilterFeatureEnabled
-          ? (option) => handleFiltersGroupBy(option.isOwner)
-          : undefined
-        }
+        groupBy={(option) => handleFiltersGroupBy(option.isOwner)}
         sx={{ width: 200 }}
         slotProps={{
           listbox: {
