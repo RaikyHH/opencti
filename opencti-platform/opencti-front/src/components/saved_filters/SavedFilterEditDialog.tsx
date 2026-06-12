@@ -16,7 +16,6 @@ import getSavedFilterScopeFilter from './getSavedFilterScopeFilter';
 import SavedFilterSharingSection from './SavedFilterSharingSection';
 import { RecordSourceSelectorProxy } from 'relay-runtime';
 import Security from '../../utils/Security';
-import useHelper from '../../utils/hooks/useHelper';
 
 const savedFilterFieldPatchMutation = graphql`
   mutation SavedFilterEditDialogFieldPatchMutation($id: ID!, $input: [EditInput!]!) {
